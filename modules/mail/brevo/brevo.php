@@ -225,18 +225,40 @@ class Brevo implements SenderModuleInterface
                 $data['to'][] = ['email' => $to[0], 'name' => $to[1]];
             }
 
-            // Set CC
-            if ($cc = $message->getRecipients('cc')) {
-                $data['cc'] = array_map(function($recipient) {
-                    return ['email' => $recipient[0], 'name' => $recipient[1]];
-                }, $cc);
+            // Set CC - dengan validasi
+            $cc = $message->getRecipients('cc');
+            if (!empty($cc)) {
+                $data['cc'] = [];
+                foreach ($cc as $recipient) {
+                    if (!empty($recipient[0])) { // Pastikan email tidak kosong
+                        $data['cc'][] = [
+                            'email' => $recipient[0],
+                            'name' => !empty($recipient[1]) ? $recipient[1] : ''
+                        ];
+                    }
+                }
+                // Hapus cc jika array kosong
+                if (empty($data['cc'])) {
+                    unset($data['cc']);
+                }
             }
 
-            // Set BCC
-            if ($bcc = $message->getRecipients('bcc')) {
-                $data['bcc'] = array_map(function($recipient) {
-                    return ['email' => $recipient[0], 'name' => $recipient[1]];
-                }, $bcc);
+            // Set BCC - dengan validasi
+            $bcc = $message->getRecipients('bcc');
+            if (!empty($bcc)) {
+                $data['bcc'] = [];
+                foreach ($bcc as $recipient) {
+                    if (!empty($recipient[0])) { // Pastikan email tidak kosong
+                        $data['bcc'][] = [
+                            'email' => $recipient[0],
+                            'name' => !empty($recipient[1]) ? $recipient[1] : ''
+                        ];
+                    }
+                }
+                // Hapus bcc jika array kosong
+                if (empty($data['bcc'])) {
+                    unset($data['bcc']);
+                }
             }
 
             // Set content
@@ -273,6 +295,9 @@ class Brevo implements SenderModuleInterface
                     ];
                 }
             }
+
+            // Log untuk debugging
+            error_log('Brevo Send Data: ' . print_r($data, true));
 
             $this->sendRequest($this->apiUrl, $data, $settings['apiKey']);
 
