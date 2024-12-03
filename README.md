@@ -14,14 +14,12 @@ Modul mail provider WHMCS untuk mengirim email menggunakan Brevo (sebelumnya Sen
 1. Download atau clone repository ini
 2. Upload folder `brevo` ke folder `modules/mail/` di instalasi WHMCS Anda
 3. Set permission folder dan file: 
-<<<<<<< HEAD
+
 ```
 chmod 755 modules/mail/brevo
 chmod 644 modules/mail/brevo/*.php
 ```
-=======
 
->>>>>>> 3efedfe6fe1ab8bbcafdbbce53b54a446836b480
 4. Bersihkan cache WHMCS:
    - Pergi ke Utilities > System > System Cleanup
    - Centang semua opsi
