@@ -17,6 +17,7 @@ use WHMCS\Exception\Mail\SendFailure;
 use WHMCS\Mail\Message;
 use WHMCS\Module\Contracts\SenderModuleInterface;
 use WHMCS\Module\MailSender\DescriptionTrait;
+use WHMCS\Config\Setting;
 
 class Brevo implements SenderModuleInterface
 {
@@ -27,6 +28,25 @@ class Brevo implements SenderModuleInterface
     private $authorUrl = 'https://www.linkedin.com/in/rohmat-ali-wardani/';
     private $version = '1.0.0';
 
+    private function getWhmcsEmailSettings()
+    {
+        $email = Setting::getValue('Email');
+        $companyName = Setting::getValue('CompanyName');
+
+        // Log untuk debugging
+        error_log('WHMCS Email: ' . $email);
+        error_log('WHMCS Company: ' . $companyName);
+
+        if (empty($email)) {
+            throw new \Exception('Email pengirim belum diatur di WHMCS. Silakan atur di Setup > General Settings > General.');
+        }
+
+        return [
+            'from_email' => $email,
+            'from_name' => $companyName ?: 'WHMCS System'
+        ];
+    }
+
     public function settings()
     {
         return [
@@ -34,16 +54,26 @@ class Brevo implements SenderModuleInterface
                 'FriendlyName' => 'API Key',
                 'Type' => 'password',
                 'Description' => 'Masukkan API key V3 dari Brevo',
+                'Required' => true,
+            ],
+            'use_whmcs_email' => [
+                'FriendlyName' => 'Gunakan Email WHMCS',
+                'Type' => 'yesno',
+                'Description' => 'Gunakan email dari pengaturan WHMCS (Setup > General Settings > General)',
+                'Default' => 'yes',
+                'Required' => true,
             ],
             'from_email' => [
                 'FriendlyName' => 'From Email',
                 'Type' => 'text',
-                'Description' => 'Alamat email pengirim',
+                'Description' => 'Alamat email pengirim (wajib diisi jika tidak menggunakan email WHMCS)',
+                'Required' => false,
             ],
             'from_name' => [
                 'FriendlyName' => 'From Name',
                 'Type' => 'text',
-                'Description' => 'Nama pengirim',
+                'Description' => 'Nama pengirim (opsional, akan menggunakan nama perusahaan dari WHMCS jika kosong)',
+                'Required' => false,
             ],
             'author_info' => [
                 'FriendlyName' => 'Developer Info',
@@ -51,6 +81,45 @@ class Brevo implements SenderModuleInterface
                 'Description' => 'Developed by <a href="' . $this->authorUrl . '" target="_blank">' . $this->author . '</a>',
             ],
         ];
+    }
+
+    private function getSenderDetails(array $settings)
+    {
+        try {
+            // Log untuk debugging
+            error_log('Settings: ' . print_r($settings, true));
+            error_log('Use WHMCS Email: ' . $settings['use_whmcs_email']);
+
+            // Perbaikan pengecekan use_whmcs_email
+            if (isset($settings['use_whmcs_email']) && ($settings['use_whmcs_email'] === 'yes' || $settings['use_whmcs_email'] === 'on' || $settings['use_whmcs_email'] == 1)) {
+                $whmcsSettings = $this->getWhmcsEmailSettings();
+                
+                error_log('WHMCS Settings: ' . print_r($whmcsSettings, true));
+                
+                // Pastikan email tidak kosong
+                if (empty($whmcsSettings['from_email'])) {
+                    throw new \Exception('Email pengirim dari WHMCS tidak valid');
+                }
+
+                return [
+                    'email' => $whmcsSettings['from_email'],
+                    'name' => $whmcsSettings['from_name']
+                ];
+            }
+
+            // Jika menggunakan custom email
+            if (empty($settings['from_email'])) {
+                throw new \Exception('Email pengirim harus diisi jika tidak menggunakan email WHMCS');
+            }
+
+            return [
+                'email' => $settings['from_email'],
+                'name' => $settings['from_name'] ?: 'WHMCS System'
+            ];
+        } catch (\Exception $e) {
+            error_log('Brevo getSenderDetails Error: ' . $e->getMessage());
+            throw new \Exception('Konfigurasi email pengirim tidak valid: ' . $e->getMessage());
+        }
     }
 
     public function getName()
@@ -106,10 +175,15 @@ class Brevo implements SenderModuleInterface
         $currentAdmin = (new CurrentUser)->admin();
 
         try {
+            $sender = $this->getSenderDetails($settings);
+            
+            // Log untuk debugging
+            error_log('Test Connection Sender: ' . print_r($sender, true));
+
             $data = [
                 'sender' => [
-                    'name' => $settings['from_name'],
-                    'email' => $settings['from_email']
+                    'name' => $sender['name'],
+                    'email' => $sender['email']
                 ],
                 'to' => [
                     ['email' => $currentAdmin->email]
@@ -135,10 +209,12 @@ class Brevo implements SenderModuleInterface
     public function send(array $settings, Message $message)
     {
         try {
+            $sender = $this->getSenderDetails($settings);
+            
             $data = [
                 'sender' => [
-                    'name' => $settings['from_name'],
-                    'email' => $settings['from_email']
+                    'name' => $sender['name'],
+                    'email' => $sender['email']
                 ],
                 'to' => [],
                 'subject' => $message->getSubject()
